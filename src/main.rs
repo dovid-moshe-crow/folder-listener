@@ -28,11 +28,14 @@ async fn watch(path: &str, url: &str) -> notify::Result<()> {
 
     // Automatically select the best implementation for your platform.
     // You can also access each implementation directly e.g. INotifyWatcher.
-    let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+    let mut watcher =
+        RecommendedWatcher::new(tx, Config::default()).expect("could not create file listener");
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
-    watcher.watch(path.as_ref(), RecursiveMode::NonRecursive)?;
+    watcher
+        .watch(path.as_ref(), RecursiveMode::NonRecursive)
+        .expect("could not create file listener");
 
     for res in rx {
         match res {
@@ -44,25 +47,19 @@ async fn watch(path: &str, url: &str) -> notify::Result<()> {
                         .expect("could not get file name")
                         .file_name()
                         .expect("could not get file name");
-                    println!("{:?} created", file_name);
+                    println!("created: {:?}", file_name);
 
-                    let full_url =
-                        format!("{}/?filename={}", url, encode(file_name.to_str().unwrap()));
+                    let full_url = format!(
+                        "{}/?filename={}",
+                        url,
+                        encode(file_name.to_str().expect("could not encode filename"))
+                    );
 
-                    println!("{}", full_url);
-
-                    let res = client
-                        .get(format!(
-                            "{}/?filename={}",
-                            url,
-                            encode(file_name.to_str().unwrap())
-                        ))
-                        .send()
-                        .await;
+                    let res = client.get(full_url).send().await;
 
                     match res {
                         Ok(response) => match response.text().await {
-                            Ok(text) => println!("{}", text),
+                            Ok(text) => println!("webhook: {}", text),
                             Err(err) => println!("http error: {:?}", err),
                         },
                         Err(e) => println!("http error: {:?}", e),
