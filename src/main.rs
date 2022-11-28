@@ -4,24 +4,33 @@ use urlencoding::encode;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let path = std::env::args()
-        .nth(1)
-        .expect("Argument 1 needs to be a path");
+    let args: Vec<String> = std::env::args().collect();
+    let path = &args.get(1).expect("Argument 1 needs to be a path");
+    let url = &args.get(2).expect("Argument 2 needs to be a url");
 
-    let url = std::env::args()
-        .nth(2)
-        .expect("Argument 2 needs to be a url");
+    let mut params = String::from("");
+
+    if args.len() > 3 {
+        for i in 3..args.len(){
+            let str = args.get(i).unwrap().split("=").collect::<Vec<&str>>();
+            let first = encode(str.get(0).expect("invalid query param"));
+            let last = encode(str.get(1).expect("invalid query param"));
+
+            params.push_str(&format!("&{}={}",first,last));
+        }
+    }
+
 
     println!("watching {}", path);
     println!("Sending events to {}", url);
-    if let Err(e) = watch(&path, &url).await {
+    if let Err(e) = watch(&path, &url, &params).await {
         println!("error: {:?}", e)
     }
 
     Ok(())
 }
 
-async fn watch(path: &str, url: &str) -> notify::Result<()> {
+async fn watch(path: &str, url: &str, params: &str) -> notify::Result<()> {
     let client = Client::new();
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -50,10 +59,13 @@ async fn watch(path: &str, url: &str) -> notify::Result<()> {
                     println!("created: {:?}", file_name);
 
                     let full_url = format!(
-                        "{}/?filename={}",
+                        "{}/?filename={}{}",
                         url,
-                        encode(file_name.to_str().expect("could not encode filename"))
+                        encode(file_name.to_str().expect("could not encode filename")),
+                        params
                     );
+
+                    println!("{}", full_url);
 
                     let res = client.get(full_url).send().await;
 
